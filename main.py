@@ -13,35 +13,29 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
 from tensorflow.keras.callbacks import Callback
 
-class TrainingThread(QThread):
-    progress_changed = pyqtSignal(int)
-    prediction_done = pyqtSignal(list, list)
-
-    def __init__(self, symbol, epochs, history_limit):
-        super().__init__()
+class Trainer:
+    def __init__(self, symbol, epochs, history_limit, future_steps=10):
         self.symbol = symbol
         self.epochs = epochs
         self.history_limit = history_limit
-        self.future_steps = 10
+        self.future_steps = future_steps
 
-    def get_klines(self, symbol, interval="1h"):
+    def get_klines(self):
         url = f"https://api.binance.com/api/v3/klines"
-        params = {"symbol": symbol, "interval": interval, "limit": self.history_limit}
+        params = {"symbol": self.symbol, "interval": "1h", "limit": self.history_limit}
         try:
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
-
             return [float(item[4]) for item in data]
         except Exception as e:
             print(f"Error getting data from Binance: {e}")
-            self.prediction_done.emit([], [])
             return []
 
-    def run(self):
-        prices = self.get_klines(self.symbol)
+    def train(self):
+        prices = self.get_klines()
         if not prices:
-            return
+            return [], []
 
         data = np.array(prices).reshape(-1, 1)
         scaler = MinMaxScaler()
@@ -60,22 +54,13 @@ class TrainingThread(QThread):
         model.add(Dense(self.future_steps))
         model.compile(optimizer='adam', loss='mean_squared_error')
 
-        class ProgressCallback(Callback):
-            def __init__(self, signal):
-                super().__init__()
-                self.signal = signal
-
-            def on_epoch_end(self, epoch, logs=None):
-                progress = int((epoch + 1) / self.params['epochs'] * 100)
-                self.signal.emit(progress)
-
-        model.fit(X, y, epochs=self.epochs, batch_size=32, callbacks=[ProgressCallback(self.progress_changed)])
+        model.fit(X, y, epochs=self.epochs, batch_size=32)
 
         last_sequence = scaled_data[-50:].reshape(1, 50, 1)
-        prediction = model.predict(last_sequence)
+        prediction = model.predict(last_sequence, verbose=0)
         prediction = scaler.inverse_transform(prediction.reshape(-1, 1)).flatten()
-
-        self.prediction_done.emit(prices, prediction.tolist())
+        print(prediction.tolist())
+        return prices, prediction.tolist()
 
 class CryptoPredictor(QMainWindow):
     def __init__(self):
@@ -106,7 +91,7 @@ class CryptoPredictor(QMainWindow):
         self.history_input.setValue(200)
 
         self.train_button = QPushButton("Predict")
-        # self.train_button.clicked.connect(self.run_prediction)
+        self.train_button.clicked.connect(self.run_prediction)
 
         self.top_layout.addWidget(self.pair_label)
         self.top_layout.addWidget(self.pair_combo)
@@ -142,11 +127,12 @@ class CryptoPredictor(QMainWindow):
         self.toggle_top_interface(False)
         self.progress_bar.setValue(0)
 
-        self.thread = TrainingThread(symbol, epochs, history_limit)
-        self.thread.progress_changed.connect(self.progress_bar.setValue)
-        self.thread.prediction_done.connect(self.plot_prediction)
-        self.thread.finished.connect(lambda: self.toggle_top_interface(True))
-        self.thread.start()
+        trainer = Trainer(symbol, epochs, history_limit)
+        real_prices, predicted = trainer.train()
+
+        self.plot_prediction(real_prices, predicted)
+        self.progress_bar.setValue(100)
+        self.toggle_top_interface(True)
 
     def plot_prediction(self, real_prices, predicted):
         self.figure.clear()
@@ -175,8 +161,11 @@ class CryptoPredictor(QMainWindow):
         except Exception as e:
             print("Error loading chart:", e)
 
+Trainer("BTCUSDT", 50, 500).train()
+"""
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = CryptoPredictor()
     window.show()
     sys.exit(app.exec_())
+"""
