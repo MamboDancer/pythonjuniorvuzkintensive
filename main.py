@@ -145,6 +145,8 @@ class CryptoPredictor(QWidget):
         layout.addWidget(self.progress_bar)
         self.setLayout(layout)
 
+        self.plot_current_price(self.pair_combo.currentText())
+
     def toggle_top_interface(self, enabled):
         for widget in [
             self.pair_combo, self.epochs_input, self.history_input,
@@ -176,6 +178,22 @@ class CryptoPredictor(QWidget):
         ax.legend()
         ax.set_title("Price Prediction")
         self.canvas.draw()
+
+    def plot_current_price(self, symbol):
+        url = f"https://api.binance.com/api/v3/klines"
+        params = {"symbol": symbol, "interval": "15m", "limit": self.history_input.value()}
+        try:
+            response = requests.get(url, params=params)
+            data = response.json()
+            prices = [float(item[4]) for item in data]
+            self.figure.clear()
+            ax = self.figure.add_subplot(111)
+            ax.plot(prices, label="Actual prices")
+            ax.legend()
+            ax.set_title(f"Actual prices for {symbol}")
+            self.canvas.draw()
+        except Exception as e:
+            print("Error loading chart:", e)
 
     def save_chart(self):
         self.figure.savefig("prediction_chart.png")
