@@ -2,7 +2,7 @@ import sys
 import requests
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QComboBox, QPushButton, QSpinBox, QProgressBar
+    QLabel, QComboBox, QPushButton, QSpinBox, QProgressBar, QMessageBox
 )
 from PyQt5.QtCore import Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -41,6 +41,9 @@ class CryptoPredictor(QMainWindow):
         self.train_button = QPushButton("Predict")
         self.train_button.clicked.connect(self.run_prediction)
 
+        self.save_chart_button = QPushButton("Save Chart")
+        self.save_chart_button.clicked.connect(self.save_chart)
+
         self.top_layout.addWidget(self.pair_label)
         self.top_layout.addWidget(self.pair_combo)
         self.top_layout.addWidget(self.epochs_label)
@@ -48,6 +51,7 @@ class CryptoPredictor(QMainWindow):
         self.top_layout.addWidget(self.history_label)
         self.top_layout.addWidget(self.history_input)
         self.top_layout.addWidget(self.train_button)
+        self.top_layout.addWidget(self.save_chart_button)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setAlignment(Qt.AlignCenter)
@@ -108,6 +112,9 @@ class CryptoPredictor(QMainWindow):
         except Exception as e:
             print("Error loading chart:", e)
 
+    def save_chart(self):
+        self.figure.savefig("prediction_chart.png")
+        QMessageBox.information(self, "Chart Saved", "Chart saved as prediction_chart.png")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
