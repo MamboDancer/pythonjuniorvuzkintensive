@@ -13,54 +13,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
 from tensorflow.keras.callbacks import Callback
 
-class Trainer:
-    def __init__(self, symbol, epochs, history_limit, future_steps=10):
-        self.symbol = symbol
-        self.epochs = epochs
-        self.history_limit = history_limit
-        self.future_steps = future_steps
-
-    def get_klines(self):
-        url = f"https://api.binance.com/api/v3/klines"
-        params = {"symbol": self.symbol, "interval": "1h", "limit": self.history_limit}
-        try:
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            return [float(item[4]) for item in data]
-        except Exception as e:
-            print(f"Error getting data from Binance: {e}")
-            return []
-
-    def train(self):
-        prices = self.get_klines()
-        if not prices:
-            return [], []
-
-        data = np.array(prices).reshape(-1, 1)
-        scaler = MinMaxScaler()
-        scaled_data = scaler.fit_transform(data)
-
-        X, y = [], []
-        for i in range(50, len(scaled_data) - self.future_steps):
-            X.append(scaled_data[i - 50:i, 0])
-            y.append(scaled_data[i:i + self.future_steps, 0])
-
-        X, y = np.array(X), np.array(y)
-        X = np.reshape(X, (X.shape[0], X.shape[1], 1))
-
-        model = Sequential()
-        model.add(LSTM(50, return_sequences=False, input_shape=(X.shape[1], 1)))
-        model.add(Dense(self.future_steps))
-        model.compile(optimizer='adam', loss='mean_squared_error')
-
-        model.fit(X, y, epochs=self.epochs, batch_size=32)
-
-        last_sequence = scaled_data[-50:].reshape(1, 50, 1)
-        prediction = model.predict(last_sequence, verbose=0)
-        prediction = scaler.inverse_transform(prediction.reshape(-1, 1)).flatten()
-        print(prediction.tolist())
-        return prices, prediction.tolist()
+from TrainingThread import TrainingThread
 
 class CryptoPredictor(QMainWindow):
     def __init__(self):
@@ -127,12 +80,11 @@ class CryptoPredictor(QMainWindow):
         self.toggle_top_interface(False)
         self.progress_bar.setValue(0)
 
-        trainer = Trainer(symbol, epochs, history_limit)
-        real_prices, predicted = trainer.train()
-
-        self.plot_prediction(real_prices, predicted)
-        self.progress_bar.setValue(100)
-        self.toggle_top_interface(True)
+        self.thread = TrainingThread(symbol, epochs, history_limit)
+        self.thread.progress_changed.connect(self.progress_bar.setValue)
+        self.thread.prediction_done.connect(self.plot_prediction)
+        self.thread.finished.connect(lambda: self.toggle_top_interface(True))
+        self.thread.start()
 
     def plot_prediction(self, real_prices, predicted):
         self.figure.clear()
@@ -161,11 +113,9 @@ class CryptoPredictor(QMainWindow):
         except Exception as e:
             print("Error loading chart:", e)
 
-Trainer("BTCUSDT", 50, 500).train()
-"""
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = CryptoPredictor()
     window.show()
     sys.exit(app.exec_())
-"""
