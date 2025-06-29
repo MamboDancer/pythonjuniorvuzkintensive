@@ -23,29 +23,29 @@ class CryptoPredictor(QWidget):
         self.top_layout = QHBoxLayout()
         self.pair_combo = QComboBox()
         self.pair_combo.addItems(["BTCUSDT", "ETHUSDT", "BNBUSDT"])
-        self.pair_combo.setToolTip("Виберіть криптовалютну пару")  # ➕ Нове
+        self.pair_combo.setToolTip("Choose crypto pair")  # ➕ Нове
         self.pair_combo.currentIndexChanged.connect(self.plot_current_price)  # ➕ Нове
 
         self.epochs_input = QSpinBox()
         self.epochs_input.setRange(1, 500)
         self.epochs_input.setValue(30)
-        self.epochs_input.setToolTip("Кількість епох навчання")  # ➕ Нове
+        self.epochs_input.setToolTip("Epoch count to train")  # ➕ Нове
 
         self.history_input = QSpinBox()
         self.history_input.setRange(100, 1000)
         self.history_input.setValue(300)
-        self.history_input.setToolTip("Скільки історичних точок враховувати")  # ➕ Нове
+        self.history_input.setToolTip("How many history points to train")  # ➕ Нове
 
         self.interval_label = QLabel("Interval:")
         self.interval_combo = QComboBox()
         self.interval_combo.addItems(["15m", "1h", "4h", "1d"])
-        self.interval_combo.setToolTip("Інтервал свічок")  # ➕ Нове
+        self.interval_combo.setToolTip("Candle interval")  # ➕ Нове
         self.interval_combo.currentIndexChanged.connect(self.plot_current_price)  # ➕ Нове
 
         self.model_label = QLabel("Model:")
         self.model_combo = QComboBox()
         self.model_combo.addItems(["LSTM", "GRU"])
-        self.model_combo.setToolTip("Тип моделі для навчання")  # ➕ Нове
+        self.model_combo.setToolTip("Model type to train")  # ➕ Нове
 
         self.train_button = QPushButton("Predict")
         self.train_button.clicked.connect(self.run_prediction)
