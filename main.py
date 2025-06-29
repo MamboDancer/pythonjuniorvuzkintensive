@@ -2,7 +2,7 @@ import sys
 import requests
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel, QHBoxLayout,
-    QComboBox, QSpinBox, QPushButton, QProgressBar, QMessageBox, QFileDialog  # ➕ Нове: QMessageBox, QFileDialog
+    QComboBox, QSpinBox, QPushButton, QProgressBar, QMessageBox, QFileDialog
 )
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -23,29 +23,29 @@ class CryptoPredictor(QWidget):
         self.top_layout = QHBoxLayout()
         self.pair_combo = QComboBox()
         self.pair_combo.addItems(["BTCUSDT", "ETHUSDT", "BNBUSDT"])
-        self.pair_combo.setToolTip("Choose crypto pair")  # ➕ Нове
-        self.pair_combo.currentIndexChanged.connect(self.plot_current_price)  # ➕ Нове
+        self.pair_combo.setToolTip("Choose crypto pair")
+        self.pair_combo.currentIndexChanged.connect(self.plot_current_price)
 
         self.epochs_input = QSpinBox()
         self.epochs_input.setRange(1, 500)
         self.epochs_input.setValue(30)
-        self.epochs_input.setToolTip("Epoch count to train")  # ➕ Нове
+        self.epochs_input.setToolTip("Epoch count to train")
 
         self.history_input = QSpinBox()
         self.history_input.setRange(100, 1000)
         self.history_input.setValue(300)
-        self.history_input.setToolTip("How many history points to train")  # ➕ Нове
+        self.history_input.setToolTip("How many history points to train")
 
         self.interval_label = QLabel("Interval:")
         self.interval_combo = QComboBox()
         self.interval_combo.addItems(["15m", "1h", "4h", "1d"])
-        self.interval_combo.setToolTip("Candle interval")  # ➕ Нове
-        self.interval_combo.currentIndexChanged.connect(self.plot_current_price)  # ➕ Нове
+        self.interval_combo.setToolTip("Candle interval")
+        self.interval_combo.currentIndexChanged.connect(self.plot_current_price)
 
         self.model_label = QLabel("Model:")
         self.model_combo = QComboBox()
         self.model_combo.addItems(["LSTM", "GRU"])
-        self.model_combo.setToolTip("Model type to train")  # ➕ Нове
+        self.model_combo.setToolTip("Model type to train")
 
         self.train_button = QPushButton("Predict")
         self.train_button.clicked.connect(self.run_prediction)
@@ -77,7 +77,7 @@ class CryptoPredictor(QWidget):
         layout.addWidget(self.progress_bar)
         self.setLayout(layout)
 
-        self.plot_current_price()  # ➕ Нове: показ графіка одразу
+        self.plot_current_price()
 
     def toggle_top_interface(self, enabled):
         for widget in [
@@ -102,24 +102,24 @@ class CryptoPredictor(QWidget):
         self.thread.finished.connect(lambda: self.toggle_top_interface(True))
         self.thread.start()
 
-    def plot_prediction(self, prices, prediction, loss_history):  # ➕ Нове: приймаємо втрати
+    def plot_prediction(self, prices, prediction, loss_history):
         self.figure.clear()
-        ax1 = self.figure.add_subplot(211)  # ➕ Нове: верхній графік — ціни
+        ax1 = self.figure.add_subplot(211)
         ax1.plot(prices, label="Actual Price")
         ax1.plot(list(range(len(prices), len(prices) + len(prediction))), prediction, label="Prediction", linestyle='dashed')
         ax1.legend()
         ax1.set_title("Price Prediction")
 
-        ax2 = self.figure.add_subplot(212)  # ➕ Нове: нижній графік — втрати
+        ax2 = self.figure.add_subplot(212)
         ax2.plot(loss_history, color='red')
         ax2.set_title("Model Loss per Epoch")
         ax2.set_xlabel("Epoch")
         ax2.set_ylabel("Loss")
 
         self.canvas.draw()
-        QMessageBox.information(self, "Ready", "Prediction is ready! 🎉")  # ➕ Нове
+        QMessageBox.information(self, "Ready", "Prediction is ready!")
 
-    def plot_current_price(self):  # ➕ Нове
+    def plot_current_price(self):
         symbol = self.pair_combo.currentText()
         interval = self.interval_combo.currentText()
         url = f"https://api.binance.com/api/v3/klines"
@@ -135,9 +135,9 @@ class CryptoPredictor(QWidget):
             ax.set_title(f"Actual prices for {symbol}")
             self.canvas.draw()
         except Exception as e:
-            QMessageBox.warning(self, "Помилка", f"Не вдалося завантажити графік: {e}")  # ➕ Нове
+            QMessageBox.warning(self, "Error", f"Cant load chart: {e}")
 
-    def save_chart(self):  # ➕ Нове
+    def save_chart(self):
         options = QFileDialog.Options()
         file_name, _ = QFileDialog.getSaveFileName(self, "Save Chart", "", "PNG Files (*.png)", options=options)
         if file_name:
