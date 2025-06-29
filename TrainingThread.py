@@ -8,7 +8,7 @@ import numpy as np
 
 class TrainingThread(QThread):
     progress_changed = pyqtSignal(int)
-    prediction_done = pyqtSignal(list, list, list)  # ➕ Нове: додаємо третій аргумент — історія втрат
+    prediction_done = pyqtSignal(list, list, list)
 
     def __init__(self, symbol, interval, epochs, history_limit, model_type):
         super().__init__()
@@ -18,7 +18,7 @@ class TrainingThread(QThread):
         self.history_limit = history_limit
         self.model_type = model_type
         self.future_steps = 10
-        self.loss_history = []  # ➕ Нове: зберігаємо втрати моделі для відображення графіка втрат
+        self.loss_history = []
 
     def get_klines(self, symbol, interval):
         url = "https://api.binance.com/api/v3/klines"
@@ -29,7 +29,7 @@ class TrainingThread(QThread):
             return [float(item[4]) for item in response.json()]
         except Exception as e:
             print(f"Error fetching data: {e}")
-            self.prediction_done.emit([], [], [])  # ➕ Нове: надсилаємо порожні списки у разі помилки
+            self.prediction_done.emit([], [], [])
             return []
 
     def run(self):
@@ -62,10 +62,10 @@ class TrainingThread(QThread):
         class ProgressCallback(Callback):
             def __init__(self, signal, loss_storage):
                 self.signal = signal
-                self.loss_storage = loss_storage  # ➕ Нове: зберігаємо втрати
+                self.loss_storage = loss_storage
 
             def on_epoch_end(self, epoch, logs=None):
-                self.loss_storage.append(logs['loss'])  # ➕ Нове: зберігаємо loss після кожної епохи
+                self.loss_storage.append(logs['loss'])
                 progress = int((epoch + 1) / self.params['epochs'] * 100)
                 self.signal.emit(progress)
 
@@ -76,4 +76,4 @@ class TrainingThread(QThread):
         prediction = model.predict(last_sequence)
         prediction = scaler.inverse_transform(prediction.reshape(-1, 1)).flatten()
 
-        self.prediction_done.emit(prices, prediction.tolist(), self.loss_history)  # ➕ Нове: передаємо втрати
+        self.prediction_done.emit(prices, prediction.tolist(), self.loss_history)
