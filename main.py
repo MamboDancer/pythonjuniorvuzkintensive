@@ -117,7 +117,7 @@ class CryptoPredictor(QWidget):
         ax2.set_ylabel("Loss")
 
         self.canvas.draw()
-        QMessageBox.information(self, "Готово", "Прогноз завершено 🎉")  # ➕ Нове
+        QMessageBox.information(self, "Ready", "Prediction is ready! 🎉")  # ➕ Нове
 
     def plot_current_price(self):  # ➕ Нове
         symbol = self.pair_combo.currentText()
