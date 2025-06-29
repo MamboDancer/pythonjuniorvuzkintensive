@@ -1,87 +1,13 @@
 import sys
 import requests
-import numpy as np
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel, QHBoxLayout,
-    QComboBox, QSpinBox, QPushButton, QProgressBar
+    QComboBox, QSpinBox, QPushButton, QProgressBar, QMessageBox, QFileDialog  # ➕ Нове: QMessageBox, QFileDialog
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
-from tensorflow.keras.callbacks import Callback
 
-
-class TrainingThread(QThread):
-    progress_changed = pyqtSignal(int)
-    prediction_done = pyqtSignal(list, list)
-
-    def __init__(self, symbol, interval, epochs, history_limit, model_type):
-        super().__init__()
-        self.symbol = symbol
-        self.interval = interval
-        self.epochs = epochs
-        self.history_limit = history_limit
-        self.model_type = model_type
-        self.future_steps = 10
-
-    def get_klines(self, symbol, interval):
-        url = "https://api.binance.com/api/v3/klines"
-        params = {"symbol": symbol, "interval": interval, "limit": self.history_limit}
-        try:
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            return [float(item[4]) for item in response.json()]
-        except Exception as e:
-            print(f"Error fetching data: {e}")
-            self.prediction_done.emit([], [])
-            return []
-
-    def run(self):
-        prices = self.get_klines(self.symbol, self.interval)
-        if not prices:
-            return
-
-        data = np.array(prices).reshape(-1, 1)
-        scaler = MinMaxScaler()
-        scaled_data = scaler.fit_transform(data)
-
-        X, y = [], []
-        for i in range(50, len(scaled_data) - self.future_steps):
-            X.append(scaled_data[i - 50:i, 0])
-            y.append(scaled_data[i:i + self.future_steps, 0])
-        X, y = np.array(X), np.array(y)
-        X = X.reshape((X.shape[0], X.shape[1], 1))
-
-        model = Sequential()
-        if self.model_type == "LSTM":
-            from tensorflow.keras.layers import LSTM
-            model.add(LSTM(50, input_shape=(X.shape[1], 1)))
-        if self.model_type == "GRU":
-            from tensorflow.keras.layers import GRU
-            model.add(GRU(50, input_shape=(X.shape[1], 1)))
-
-        model.add(Dense(self.future_steps))
-
-        model.compile(optimizer='adam', loss='mean_squared_error')
-
-        class ProgressCallback(Callback):
-            def __init__(self, signal):
-                self.signal = signal
-
-            def on_epoch_end(self, epoch, logs=None):
-                progress = int((epoch + 1) / self.params['epochs'] * 100)
-                self.signal.emit(progress)
-
-        model.fit(X, y, epochs=self.epochs, batch_size=32, callbacks=[ProgressCallback(self.progress_changed)])
-
-        last_sequence = scaled_data[-50:].reshape(1, 50, 1)
-        prediction = model.predict(last_sequence)
-        prediction = scaler.inverse_transform(prediction.reshape(-1, 1)).flatten()
-
-        self.prediction_done.emit(prices, prediction.tolist())
+from TrainingThread import TrainingThread
 
 
 class CryptoPredictor(QWidget):
@@ -94,24 +20,32 @@ class CryptoPredictor(QWidget):
     def init_ui(self):
         layout = QVBoxLayout()
 
-        # Верхній блок
         self.top_layout = QHBoxLayout()
         self.pair_combo = QComboBox()
         self.pair_combo.addItems(["BTCUSDT", "ETHUSDT", "BNBUSDT"])
+        self.pair_combo.setToolTip("Choose crypto pair")  # ➕ Нове
+        self.pair_combo.currentIndexChanged.connect(self.plot_current_price)  # ➕ Нове
+
         self.epochs_input = QSpinBox()
         self.epochs_input.setRange(1, 500)
         self.epochs_input.setValue(30)
+        self.epochs_input.setToolTip("Epoch count to train")  # ➕ Нове
+
         self.history_input = QSpinBox()
         self.history_input.setRange(100, 1000)
         self.history_input.setValue(300)
+        self.history_input.setToolTip("How many history points to train")  # ➕ Нове
 
         self.interval_label = QLabel("Interval:")
         self.interval_combo = QComboBox()
         self.interval_combo.addItems(["15m", "1h", "4h", "1d"])
+        self.interval_combo.setToolTip("Candle interval")  # ➕ Нове
+        self.interval_combo.currentIndexChanged.connect(self.plot_current_price)  # ➕ Нове
 
         self.model_label = QLabel("Model:")
         self.model_combo = QComboBox()
         self.model_combo.addItems(["LSTM", "GRU"])
+        self.model_combo.setToolTip("Model type to train")  # ➕ Нове
 
         self.train_button = QPushButton("Predict")
         self.train_button.clicked.connect(self.run_prediction)
@@ -132,11 +66,9 @@ class CryptoPredictor(QWidget):
         self.top_layout.addWidget(self.train_button)
         self.top_layout.addWidget(self.save_button)
 
-        # Графік
         self.figure = Figure()
         self.canvas = FigureCanvas(self.figure)
 
-        # Прогрес
         self.progress_bar = QProgressBar()
         self.progress_bar.setValue(0)
 
@@ -145,7 +77,7 @@ class CryptoPredictor(QWidget):
         layout.addWidget(self.progress_bar)
         self.setLayout(layout)
 
-        self.plot_current_price(self.pair_combo.currentText())
+        self.plot_current_price()  # ➕ Нове: показ графіка одразу
 
     def toggle_top_interface(self, enabled):
         for widget in [
@@ -170,18 +102,28 @@ class CryptoPredictor(QWidget):
         self.thread.finished.connect(lambda: self.toggle_top_interface(True))
         self.thread.start()
 
-    def plot_prediction(self, prices, prediction):
+    def plot_prediction(self, prices, prediction, loss_history):  # ➕ Нове: приймаємо втрати
         self.figure.clear()
-        ax = self.figure.add_subplot(111)
-        ax.plot(prices, label="Actual Price")
-        ax.plot(list(range(len(prices), len(prices) + len(prediction))), prediction, label="Prediction", linestyle='dashed')
-        ax.legend()
-        ax.set_title("Price Prediction")
-        self.canvas.draw()
+        ax1 = self.figure.add_subplot(211)  # ➕ Нове: верхній графік — ціни
+        ax1.plot(prices, label="Actual Price")
+        ax1.plot(list(range(len(prices), len(prices) + len(prediction))), prediction, label="Prediction", linestyle='dashed')
+        ax1.legend()
+        ax1.set_title("Price Prediction")
 
-    def plot_current_price(self, symbol):
+        ax2 = self.figure.add_subplot(212)  # ➕ Нове: нижній графік — втрати
+        ax2.plot(loss_history, color='red')
+        ax2.set_title("Model Loss per Epoch")
+        ax2.set_xlabel("Epoch")
+        ax2.set_ylabel("Loss")
+
+        self.canvas.draw()
+        QMessageBox.information(self, "Ready", "Prediction is ready! 🎉")  # ➕ Нове
+
+    def plot_current_price(self):  # ➕ Нове
+        symbol = self.pair_combo.currentText()
+        interval = self.interval_combo.currentText()
         url = f"https://api.binance.com/api/v3/klines"
-        params = {"symbol": symbol, "interval": "15m", "limit": self.history_input.value()}
+        params = {"symbol": symbol, "interval": interval, "limit": self.history_input.value()}
         try:
             response = requests.get(url, params=params)
             data = response.json()
@@ -193,11 +135,14 @@ class CryptoPredictor(QWidget):
             ax.set_title(f"Actual prices for {symbol}")
             self.canvas.draw()
         except Exception as e:
-            print("Error loading chart:", e)
+            QMessageBox.warning(self, "Помилка", f"Не вдалося завантажити графік: {e}")  # ➕ Нове
 
-    def save_chart(self):
-        self.figure.savefig("prediction_chart.png")
-        print("Chart saved as prediction_chart.png")
+    def save_chart(self):  # ➕ Нове
+        options = QFileDialog.Options()
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save Chart", "", "PNG Files (*.png)", options=options)
+        if file_name:
+            self.figure.savefig(file_name)
+            QMessageBox.information(self, "Saved!", f"Plot saved as:\n{file_name}")
 
 
 if __name__ == "__main__":
